@@ -2,7 +2,8 @@
 
 process.on('unhandledRejection', err => {throw err});
 
-const fs = require('fs-extra');
+const fs = require('fs');
+const chalk = require('chalk');
 const dependencyCheck = require('dependency-check');
 const pathModule = require('path');
 const findPackageFiles = require('@brillout/find-package-files');
@@ -14,34 +15,49 @@ if( isCli() ) {
     module.exports = checkDeps;
 }
 
-async function checkDeps(monorepoRootDir=process.cwd(), opts) {
+async function checkDeps(monorepoRootDir=process.cwd(), dependencyCheckOpts) {
     const monorepoPackage = await getPackageJson(monorepoRootDir);
     const {workspaces} = monorepoPackage;
 
     let errors = [];
 
+    const skipedWorkspaces = [];
+
     for(const pkgPath of workspaces) {
         const pkgRootDir = pathModule.join(monorepoRootDir, pkgPath);
         const pkg = await getPackageJson(pkgRootDir);
-        if( pkg.skipCheckDeps ) {
+        if( (pkg.checkDeps||{}).skip === true ) {
+            skipedWorkspaces.push(pkgPath);
             continue;
         }
+        let skip = [];
+        if( (pkg.checkDeps||{}).skip instanceof Array ) {
+            skip = pkg.checkDeps.skip;
+        }
         try {
-            errors.push(...await checkPackage(pkgRootDir, opts));
+            errors.push(...await checkPackage({pkgRootDir, dependencyCheckOpts, skip}));
         } catch(err) {
-            console.error('\nError for '+pkgRootDir+'\n');
+            console.error(chalk.bold.red('\nError for '+pkgRootDir+'\n'));
             throw err;
         }
     }
 
     if( errors.length===0 ) {
-        console.log('Success! All dependencies correctly listed for\n'+workspaces.join('\n'));
+        console.log('All dependencies correctly listed.')
+        console.log();
+        console.log(chalk.cyan('Checked:'));
+        console.log(workspaces.join('\n'));
+        console.log();
+        console.log(chalk.cyan('Skiped:'));
+        console.log(skipedWorkspaces.join('\n'));
+        console.log();
+        console.log(chalk.green('Success!'));
     } else {
         errors.forEach(msg => console.error(msg));
     }
 }
 
-async function checkPackage(pkgRootDir, opts={excludeDev: true}) {
+async function checkPackage({pkgRootDir, dependencyCheckOpts={excludeDev: true}, skip}) {
     const pkgPath = pathModule.resolve(pkgRootDir, './package.json');
 
     const jsFiles = (
@@ -63,7 +79,8 @@ async function checkPackage(pkgRootDir, opts={excludeDev: true}) {
     const deps = data.used;
 
     const extras = (
-        dependencyCheck.extra(pkg, deps, opts)
+        dependencyCheck.extra(pkg, deps, dependencyCheckOpts)
+        .filter(pkgName => !skip.includes(pkgName))
         .filter(pkgName =>
             !jsFiles.some(jsFile => {
                 const jsFileContent = fs.readFileSync(pathModule.resolve(pkgRootDir, jsFile), 'utf-8');
@@ -78,13 +95,13 @@ async function checkPackage(pkgRootDir, opts={excludeDev: true}) {
     const errors = [];
 
     if( extras.length ) {
-        errors.push('Fail! Modules in '+pkgPath+' not used in code: ' + extras.join(', '));
+        errors.push(chalk.red('Fail!')+' Modules in '+pkgPath+' '+chalk.bold.red('not used')+' in code: ' + extras.join(', '));
     }
 
-    const missing = dependencyCheck.missing(pkg, deps, opts);
+    const missing = dependencyCheck.missing(pkg, deps, dependencyCheckOpts);
 
     if( missing.length ) {
-        errors.push('Fail! Dependencies not listed in '+pkgPath+': ' + missing.join(', '));
+        errors.push(chalk.red('Fail!')+' Dependencies '+chalk.bold.red('not listed')+' in '+pkgPath+': ' + missing.join(', '));
     }
 
     return errors;
@@ -93,5 +110,11 @@ async function checkPackage(pkgRootDir, opts={excludeDev: true}) {
 function isCli() { return require.main === module; }
 
 async function getPackageJson(packageRootDir) {
-    return JSON.parse(await fs.readFile(pathModule.resolve(packageRootDir, './package.json')));
+    const packageJsonFile = pathModule.resolve(packageRootDir, './package.json');
+    try {
+        return require(packageJsonFile);
+    } catch(err) {
+        console.error(chalk.bold.red("Error parsing `"+packageJsonFile+"`:"));
+        throw err;
+    }
 }

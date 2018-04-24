@@ -1,11 +1,12 @@
 {
   "name": "@brillout/check-deps",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "main": "./check-deps.js",
   "bin": "./check-deps.js",
   "dependencies": {
+    "@brillout/find-package-files": "^0.1.0",
+    "chalk": "^2.4.0",
     "dependency-check": "^3.1.0",
-    "fs-extra": "^5.0.0",
     "reassert": "^1.1.8"
   },
   "repository": "github:brillout/check-deps",
