@@ -98,7 +98,10 @@ async function checkPackage({pkgRootDir, dependencyCheckOpts={excludeDev: true},
         errors.push(chalk.red('Fail!')+' Modules in '+pkgPath+' '+chalk.bold.red('not used')+' in code: ' + extras.join(', '));
     }
 
-    const missing = dependencyCheck.missing(pkg, deps, dependencyCheckOpts);
+    const missing = (
+        dependencyCheck.missing(pkg, deps, dependencyCheckOpts)
+        .filter(pkgName => !skip.includes(pkgName))
+    );
 
     if( missing.length ) {
         errors.push(chalk.red('Fail!')+' Dependencies '+chalk.bold.red('not listed')+' in '+pkgPath+': ' + missing.join(', '));
