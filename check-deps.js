@@ -62,16 +62,12 @@ async function checkPackage({pkgRootDir, dependencyCheckOpts={excludeDev: true},
 
     const jsFiles = (
         [
-            ...findPackageFiles('*.js', {cwd: pkgRootDir}),
-            ...findPackageFiles('*.jsx', {cwd: pkgRootDir}),
+            ...findPackageFiles('*.js', {cwd: pkgRootDir, ignoreSubPackages: true}),
+            ...findPackageFiles('*.jsx', {cwd: pkgRootDir, ignoreSubPackages: true}),
         ]
         .map(filePath => pathModule.relative(pkgRootDir, filePath))
-        .filter(filePath => {
-            assert_internal(!filePath.startsWith('.'));
-            assert_internal(!filePath.startsWith(pathModule.sep));
-            return !filePath.startsWith('example');
-        })
     );
+ // pkgRootDir.includes('plugins/init') && console.log(jsFiles);
 
     const data = await dependencyCheck({path: pkgPath, entries: jsFiles, excludeDev: true});
 
