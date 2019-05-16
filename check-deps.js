@@ -7,7 +7,7 @@ const chalk = require('chalk');
 const dependencyCheck = require('dependency-check');
 const pathModule = require('path');
 const findPackageFiles = require('@brillout/find-package-files');
-const assert_internal = require('reassert/internal');
+const assert = require('@brillout/reassert');
 
 if( isCli() ) {
     checkDeps();
@@ -39,6 +39,7 @@ async function checkDeps(monorepoRootDir=process.cwd(), dependencyCheckOpts) {
         } catch(err) {
             console.error(chalk.bold.red('\nError for '+pkgRootDir+'\n'));
             throw err;
+            process.exit();
         }
     }
 
@@ -46,7 +47,11 @@ async function checkDeps(monorepoRootDir=process.cwd(), dependencyCheckOpts) {
         console.log('All dependencies correctly listed.')
         console.log();
         console.log(chalk.cyan('Checked:'));
-        console.log(workspaces.join('\n'));
+        console.log(
+          workspaces
+          .filter(workspace => !skipedWorkspaces.includes(workspace))
+          .join('\n')
+        );
         console.log();
         console.log(chalk.cyan('Skiped:'));
         console.log(skipedWorkspaces.join('\n'));
@@ -69,7 +74,15 @@ async function checkPackage({pkgRootDir, dependencyCheckOpts={excludeDev: true},
     );
  // pkgRootDir.includes('plugins/init') && console.log(jsFiles);
 
-    const data = await dependencyCheck({path: pkgPath, entries: jsFiles, excludeDev: true});
+    let data;
+    try {
+        data = await dependencyCheck({path: pkgPath, entries: jsFiles, excludeDev: true});
+    } catch(err) {
+        assert.log({jsFiles});
+        console.error(chalk.bold.red('\nError checking jsFiles of '+pkgPath+'\n'));
+        console.error(err);
+        process.exit();
+    }
 
     const pkg = data.package;
     const deps = data.used;
