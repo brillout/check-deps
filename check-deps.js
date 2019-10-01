@@ -19,6 +19,8 @@ async function checkDeps(monorepoRootDir=process.cwd(), dependencyCheckOpts) {
     const monorepoPackage = await getPackageJson(monorepoRootDir);
     const {workspaces} = monorepoPackage;
 
+    const config = getConfig(monorepoRootDir);
+
     let errors = [];
 
     const skipedWorkspaces = [];
@@ -26,7 +28,10 @@ async function checkDeps(monorepoRootDir=process.cwd(), dependencyCheckOpts) {
     for(const pkgPath of workspaces) {
         const pkgRootDir = pathModule.join(monorepoRootDir, pkgPath);
         const pkg = await getPackageJson(pkgRootDir);
-        if( (pkg.checkDeps||{}).skip === true ) {
+        if(
+          pkg.checkDeps && pkg.checkDeps.skip === true ||
+          config.skipCheck && config.skipCheck(pkgPath)
+        ) {
             skipedWorkspaces.push(pkgPath);
             continue;
         }
@@ -128,5 +133,14 @@ async function getPackageJson(packageRootDir) {
     } catch(err) {
         console.error(chalk.bold.red("Error parsing `"+packageJsonFile+"`:"));
         throw err;
+    }
+}
+
+function getConfig(monorepoRootDir) {
+    const configFilePath = pathModule.resolve(monorepoRootDir, './.check-deps.js');
+    try {
+        return require(configFilePath);
+    } catch(err) {
+        return {};
     }
 }
